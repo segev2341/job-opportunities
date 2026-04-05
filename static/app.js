@@ -174,12 +174,25 @@ function renderConnectionChip(conn) {
     const href = conn.url || "#";
     const connectedLabel = conn.is_connected ? "Connected" : "Not connected";
 
+    // Show mutual/bridge connection for 2nd-degree
+    let mutualHtml = "";
+    const mutual = conn.mutual_connection;
+    if (mutual && mutual.name) {
+        const mutualLink = mutual.url
+            ? `<a href="${escapeHtml(mutual.url)}" target="_blank" rel="noopener">${escapeHtml(mutual.name)}</a>`
+            : escapeHtml(mutual.name);
+        mutualHtml = `<span class="mutual-via">via ${mutualLink}</span>`;
+    }
+
     return `
-        <a href="${escapeHtml(href)}" target="_blank" rel="noopener" class="connection-chip ${degreeClass}" title="${escapeHtml(conn.headline || "")} - ${connectedLabel}">
-            <span class="conn-degree">${escapeHtml(conn.connection_degree)}</span>
-            <span>${escapeHtml(conn.name)}</span>
-            ${tags}
-        </a>
+        <div class="connection-chip-wrapper">
+            <a href="${escapeHtml(href)}" target="_blank" rel="noopener" class="connection-chip ${degreeClass}" title="${escapeHtml(conn.headline || "")} - ${connectedLabel}">
+                <span class="conn-degree">${escapeHtml(conn.connection_degree)}</span>
+                <span>${escapeHtml(conn.name)}</span>
+                ${tags}
+            </a>
+            ${mutualHtml}
+        </div>
     `;
 }
 
@@ -292,6 +305,9 @@ async function submitConnection(event) {
         degree: document.getElementById("conn-degree").value,
         is_connected: document.getElementById("conn-degree").value === "1st",
         background_tags: tags,
+        mutual_name: document.getElementById("conn-mutual-name").value,
+        mutual_url: document.getElementById("conn-mutual-url").value,
+        mutual_headline: document.getElementById("conn-mutual-headline").value,
     };
 
     try {

@@ -76,6 +76,7 @@ class ConnectionFinder:
         for person in first_degree:
             person["connection_degree"] = "1st"
             person["is_connected"] = True
+            person["mutual_connection"] = None
             connections.append(person)
 
         await self._delay()
@@ -85,7 +86,13 @@ class ConnectionFinder:
         for person in second_degree:
             person["connection_degree"] = "2nd"
             person["is_connected"] = False
+            person["mutual_connection"] = None
+            # Try to find the mutual/bridge connection
+            mutual = await self._get_mutual_connection(person)
+            if mutual:
+                person["mutual_connection"] = mutual
             connections.append(person)
+            await self._delay()
 
         # Categorize by background
         for conn in connections:
@@ -198,9 +205,67 @@ class ConnectionFinder:
             "background_tags": [],
             "connection_degree": "",
             "is_connected": False,
+            "mutual_connection": None,
             "priority": 99,
             "found_at": datetime.now().isoformat(),
         }
+
+    async def _get_mutual_connection(self, person):
+        """Visit a 2nd-degree connection's profile to find the mutual/bridge connection."""
+        profile_url = person.get("url", "")
+        if not profile_url or "linkedin.com/in/" not in profile_url:
+            return None
+
+        try:
+            await self.page.goto(profile_url, wait_until="domcontentloaded", timeout=20000)
+            await self.page.wait_for_timeout(2000)
+
+            # LinkedIn shows "N mutual connections" link on 2nd-degree profiles
+            # Try to find and click the mutual connections link
+            mutual_link = await self.page.query_selector(
+                "a[href*='facetNetwork'][href*='mutual'], "
+                "a[href*='connectionOf'], "
+                "span.dist-value:has-text('2nd'), "
+                "a:has-text('mutual connection'), "
+                "a:has-text('mutual connections')"
+            )
+
+            if mutual_link:
+                await mutual_link.click()
+                await self.page.wait_for_timeout(3000)
+
+                # Parse the first mutual connection shown
+                mutual_card = await self.page.query_selector(
+                    "div.entity-result__item, li.reusable-search__result-container"
+                )
+                if mutual_card:
+                    mutual_person = await self._parse_person_card(mutual_card)
+                    if mutual_person:
+                        return {
+                            "name": mutual_person["name"],
+                            "url": mutual_person["url"],
+                            "headline": mutual_person["headline"],
+                        }
+
+            # Fallback: try to extract mutual connection text from the profile page itself
+            mutual_text_el = await self.page.query_selector(
+                "[class*='mutual'] a, "
+                "a[href*='mutual']"
+            )
+            if mutual_text_el:
+                text = await mutual_text_el.inner_text()
+                href = await mutual_text_el.get_attribute("href") or ""
+                if text.strip():
+                    return {
+                        "name": text.strip(),
+                        "url": href if href.startswith("http") else "",
+                        "headline": "",
+                    }
+
+        except Exception as e:
+            logger.warning("Could not get mutual connection for %s: %s", person.get("name"), e)
+
+        return None
 
     def _categorize_background(self, person):
         """Check person's headline/summary for background keywords."""

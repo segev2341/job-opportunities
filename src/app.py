@@ -100,7 +100,7 @@ def api_stats():
 def api_scrape():
     """Trigger a job scrape from the dashboard."""
     try:
-        from src.scraper import LinkedInJobScraper, load_config as load_scraper_config
+        from scraper import LinkedInJobScraper, load_config as load_scraper_config
 
         config = load_scraper_config()
         scraper = LinkedInJobScraper(config)
@@ -142,6 +142,14 @@ def api_add_connection():
     connections = load_connections()
     company = data.get("company", "Unknown")
 
+    mutual_data = None
+    if data.get("mutual_name"):
+        mutual_data = {
+            "name": data.get("mutual_name", ""),
+            "url": data.get("mutual_url", ""),
+            "headline": data.get("mutual_headline", ""),
+        }
+
     conn = {
         "name": data.get("name", ""),
         "url": data.get("url", ""),
@@ -150,6 +158,7 @@ def api_add_connection():
         "connection_degree": data.get("degree", "1st"),
         "is_connected": data.get("is_connected", True),
         "background_tags": data.get("background_tags", []),
+        "mutual_connection": mutual_data,
         "priority": int(data.get("priority", 5)),
         "found_at": datetime.now().isoformat(),
     }
