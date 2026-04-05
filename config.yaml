@@ -1,0 +1,190 @@
+# ============================================================
+# Job Opportunities Scraper - Configuration
+# ============================================================
+
+search:
+  # Job role keywords to search for
+  keywords:
+    - "sales enablement"
+    - "pre-sales"
+    - "presales"
+    - "business development"
+    - "BD manager"
+    - "sales engineer"
+    - "solutions consultant"
+    - "account executive"
+
+  # Location filter
+  location: "Israel"
+  geo_id: "101620260"  # LinkedIn geographic ID for Israel
+
+  # How many job results to fetch per keyword (max 1000)
+  max_results_per_keyword: 100
+
+# Companies in defense / cyber security / defense-tech industries
+# The scraper will prioritize jobs at these companies
+companies:
+  defense:
+    - "Elbit Systems"
+    - "Rafael Advanced Defense Systems"
+    - "Israel Aerospace Industries"
+    - "Israel Military Industries"
+    - "Israel Weapon Industries"
+    - "Elisra"
+    - "Aeronautics"
+    - "Ashot Ashkelon"
+    - "Plasan"
+    - "Carmor"
+    - "UVision"
+    - "Controp"
+    - "Meprolight"
+    - "Magal Security Systems"
+    - "BIRD Aerosystems"
+    - "General Robotics"
+    - "Smart Shooter"
+    - "Roboteam"
+    - "Eltics"
+    - "Elta Systems"
+    - "Iron Dome"
+    - "mPrest"
+    - "Windward"
+
+  cyber_security:
+    - "Check Point Software"
+    - "CyberArk"
+    - "Palo Alto Networks"
+    - "SentinelOne"
+    - "Wiz"
+    - "Orca Security"
+    - "Armis"
+    - "Varonis"
+    - "Imperva"
+    - "Radware"
+    - "Cybereason"
+    - "Claroty"
+    - "Pentera"
+    - "XM Cyber"
+    - "Hunters"
+    - "Cato Networks"
+    - "Axonius"
+    - "SafeBreach"
+    - "Deep Instinct"
+    - "Morphisec"
+    - "Silverfort"
+    - "Sygnia"
+    - "Snyk"
+    - "Talon Cyber Security"
+    - "Perimeter 81"
+    - "Illusive Networks"
+    - "Cyolo"
+    - "Semperis"
+    - "Seemplicity"
+    - "Torq"
+    - "Aim Security"
+    - "Astrix Security"
+    - "Dazz"
+    - "Opus Security"
+    - "Veriti"
+    - "Guardio"
+    - "Oligo Security"
+    - "Sweet Security"
+    - "Zenity"
+    - "Valence Security"
+    - "Wing Security"
+    - "Adaptive Shield"
+    - "Ermetic"
+    - "Lightspin"
+    - "Vulcan Cyber"
+    - "Sepio"
+    - "SAM Seamless Network"
+    - "IRONSCALES"
+    - "Perception Point"
+    - "Opora"
+
+  defense_tech:
+    - "Shield AI"
+    - "Anduril"
+    - "Palantir"
+    - "L3Harris"
+    - "Northrop Grumman"
+    - "Lockheed Martin"
+    - "Raytheon"
+    - "BAE Systems"
+    - "Thales"
+    - "Leonardo"
+    - "Hensoldt"
+    - "Rheinmetall"
+    - "MBDA"
+
+# Connection search configuration
+connections:
+  # Background keywords to identify connection sources
+  background_keywords:
+    iaf:
+      - "Israeli Air Force"
+      - "IAF"
+      - "חיל האוויר"
+      - "Air Force"
+      - "Flight Academy"
+      - "Hatzerim"
+    iaf_special_forces:
+      - "Shaldag"
+      - "שלדג"
+      - "Unit 5101"
+      - "669"
+      - "יחידה 5101"
+      - "Airborne Rescue"
+    tel_aviv_university:
+      - "Tel Aviv University"
+      - "TAU"
+      - "אוניברסיטת תל אביב"
+      - "Tel-Aviv University"
+
+  # Priority order for connection types
+  priorities:
+    - source: "IAF (Connected)"
+      keywords_group: "iaf"
+      connected: true
+      priority: 1
+      color: "#22c55e"
+    - source: "IAF Special Forces"
+      keywords_group: "iaf_special_forces"
+      connected: false
+      priority: 2
+      color: "#f59e0b"
+    - source: "Tel Aviv University"
+      keywords_group: "tel_aviv_university"
+      connected: false
+      priority: 3
+      color: "#3b82f6"
+
+# Resume keywords for matching (add your own skills/experience)
+resume:
+  skills:
+    - "sales"
+    - "business development"
+    - "pre-sales"
+    - "sales enablement"
+    - "account management"
+    - "defense"
+    - "security"
+    - "cyber"
+    - "military"
+    - "leadership"
+    - "strategy"
+    - "partnerships"
+  # Or point to a resume text file:
+  # file: "data/resume.txt"
+
+# Scraping settings
+scraping:
+  # Delay between requests (seconds) - be respectful
+  delay_min: 2
+  delay_max: 5
+  # User agent
+  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+
+# Dashboard settings
+dashboard:
+  host: "127.0.0.1"
+  port: 5000

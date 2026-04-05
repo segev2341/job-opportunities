@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Opportunities Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <h1>Job Opportunities</h1>
+            <p class="subtitle">Defense &amp; Cyber Security | Israel</p>
+        </div>
+        <div class="header-actions">
+            <button id="btn-scrape" class="btn btn-primary" onclick="runScrape()">
+                <span class="btn-icon">&#x1F50D;</span> Scrape Jobs
+            </button>
+            <button class="btn btn-secondary" onclick="openModal('add-job-modal')">
+                + Add Job
+            </button>
+            <button class="btn btn-secondary" onclick="openModal('add-connection-modal')">
+                + Add Connection
+            </button>
+        </div>
+    </header>
+
+    <!-- Stats Bar -->
+    <div class="stats-bar">
+        <div class="stat">
+            <span class="stat-value" id="stat-jobs">0</span>
+            <span class="stat-label">Jobs Found</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value" id="stat-companies">0</span>
+            <span class="stat-label">Companies</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value" id="stat-connections">0</span>
+            <span class="stat-label">Connections</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value" id="stat-updated">-</span>
+            <span class="stat-label">Last Updated</span>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters">
+        <input type="text" id="filter-search" placeholder="Search jobs..." oninput="applyFilters()">
+        <select id="filter-company" onchange="applyFilters()">
+            <option value="">All Companies</option>
+        </select>
+        <select id="filter-sort" onchange="applyFilters()">
+            <option value="match">Sort by Match Score</option>
+            <option value="date">Sort by Date</option>
+            <option value="company">Sort by Company</option>
+        </select>
+    </div>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div id="jobs-container" class="jobs-grid">
+            <div class="loading">Loading jobs...</div>
+        </div>
+    </main>
+
+    <!-- Add Job Modal -->
+    <div id="add-job-modal" class="modal" onclick="closeModalOutside(event)">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add Job Manually</h2>
+                <button class="close-btn" onclick="closeModal('add-job-modal')">&times;</button>
+            </div>
+            <form onsubmit="submitJob(event)">
+                <div class="form-group">
+                    <label>Job Title</label>
+                    <input type="text" id="job-title" required>
+                </div>
+                <div class="form-group">
+                    <label>Company</label>
+                    <input type="text" id="job-company" required>
+                </div>
+                <div class="form-group">
+                    <label>LinkedIn URL</label>
+                    <input type="url" id="job-url" placeholder="https://www.linkedin.com/jobs/view/...">
+                </div>
+                <div class="form-group">
+                    <label>Location</label>
+                    <input type="text" id="job-location" value="Israel">
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="job-description" rows="4"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary full-width">Add Job</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Connection Modal -->
+    <div id="add-connection-modal" class="modal" onclick="closeModalOutside(event)">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add Connection</h2>
+                <button class="close-btn" onclick="closeModal('add-connection-modal')">&times;</button>
+            </div>
+            <form onsubmit="submitConnection(event)">
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" id="conn-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Company</label>
+                    <input type="text" id="conn-company" required>
+                </div>
+                <div class="form-group">
+                    <label>LinkedIn URL</label>
+                    <input type="url" id="conn-url" placeholder="https://www.linkedin.com/in/...">
+                </div>
+                <div class="form-group">
+                    <label>Headline / Role</label>
+                    <input type="text" id="conn-headline">
+                </div>
+                <div class="form-group">
+                    <label>Connection Degree</label>
+                    <select id="conn-degree">
+                        <option value="1st">1st (Direct Connection)</option>
+                        <option value="2nd">2nd (Friend of Friend)</option>
+                        <option value="3rd">3rd</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Background Tags</label>
+                    <div class="checkbox-group">
+                        <label><input type="checkbox" value="iaf"> IAF (Israeli Air Force)</label>
+                        <label><input type="checkbox" value="iaf_special_forces"> IAF Special Forces</label>
+                        <label><input type="checkbox" value="tel_aviv_university"> Tel Aviv University</label>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary full-width">Add Connection</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast"></div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
