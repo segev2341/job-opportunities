@@ -1,0 +1,280 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── User & Preferences ────────────────────────────────────────
+
+model User {
+  id          String   @id @default(uuid())
+  name        String
+  email       String   @unique
+  linkedinUrl String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  preferences    UserPreferences?
+  searchProfiles SearchProfile[]
+  huntRuns       HuntRun[]
+  applications   Application[]
+  outreachEvents OutreachEvent[]
+  followUpTasks  FollowUpTask[]
+}
+
+model UserPreferences {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id])
+  targetRoles     String   @default("[]") // JSON string[]
+  targetSectors   String   @default("[]") // JSON string[]
+  targetLocations String   @default("[]") // JSON string[]
+  experienceYears Int      @default(0)
+  backgroundTags  String   @default("[]") // JSON string[] e.g. ["IAF","TAU"]
+  resumeKeywords  String   @default("[]") // JSON string[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model SearchProfile {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  name      String
+  roles     String   @default("[]")
+  sectors   String   @default("[]")
+  companies String   @default("[]")
+  locations String   @default("[]")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── HuntRun ────────────────────────────────────────────────────
+
+model HuntRun {
+  id               String        @id @default(uuid())
+  userId           String
+  user             User          @relation(fields: [userId], references: [id])
+  status           String        @default("pending") // pending | running | completed | failed
+  startedAt        DateTime?
+  completedAt      DateTime?
+  queriesGenerated Int           @default(0)
+  jobsFetched      Int           @default(0)
+  jobsCanonical    Int           @default(0)
+  jobsRanked       Int           @default(0)
+  connectionsFound Int           @default(0)
+  errors           String        @default("[]") // JSON string[]
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  steps      HuntRunStep[]
+  rankedJobs RankedJob[]
+}
+
+model HuntRunStep {
+  id          String    @id @default(uuid())
+  huntRunId   String
+  huntRun     HuntRun   @relation(fields: [huntRunId], references: [id], onDelete: Cascade)
+  name        String
+  status      String    @default("pending")
+  startedAt   DateTime?
+  completedAt DateTime?
+  detail      String?
+  error       String?
+  createdAt   DateTime  @default(now())
+}
+
+// ─── Jobs ───────────────────────────────────────────────────────
+
+model JobPostingRaw {
+  id             String               @id @default(uuid())
+  source         String
+  externalId     String
+  title          String
+  company        String
+  location       String
+  url            String
+  description    String
+  postedAt       DateTime?
+  fetchedAt      DateTime             @default(now())
+  payload        String               @default("{}") // full JSON blob
+  canonicalJobId String?
+  canonicalJob   JobPostingCanonical? @relation(fields: [canonicalJobId], references: [id])
+
+  @@unique([source, externalId])
+}
+
+model JobPostingCanonical {
+  id             String    @id @default(uuid())
+  title          String
+  company        String
+  companyId      String?
+  location       String
+  url            String
+  description    String
+  seniority      String?
+  employmentType String?
+  sector         String?
+  postedAt       DateTime?
+  isRepost       Boolean   @default(false)
+  firstSeenAt    DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  rawPostings    JobPostingRaw[]
+  scores         JobScore[]
+  rankedJobs     RankedJob[]
+  applications   Application[]
+  warmPaths      WarmPathRecommendation[]
+  outreachDrafts OutreachDraft[]
+}
+
+// ─── Company ────────────────────────────────────────────────────
+
+model Company {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  sector      String?
+  size        String?
+  hq          String?
+  description String?
+  linkedinUrl String?
+  website     String?
+  isTarget    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  people Person[]
+}
+
+// ─── People & Network ───────────────────────────────────────────
+
+model Person {
+  id                 String   @id @default(uuid())
+  name               String
+  title              String?
+  companyId          String?
+  company            Company? @relation(fields: [companyId], references: [id])
+  companyName        String?
+  linkedinUrl        String?
+  connectionDegree   Int      @default(0) // 0=unknown 1=1st 2=2nd
+  isConnected        Boolean  @default(false)
+  backgroundTags     String   @default("[]") // JSON string[]
+  mutualConnectionId String?
+  mutualConnection   Person?  @relation("MutualConn", fields: [mutualConnectionId], references: [id])
+  bridgedPeople      Person[] @relation("MutualConn")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  warmPaths      WarmPathRecommendation[]
+  outreachDrafts OutreachDraft[]
+  outreachEvents OutreachEvent[]
+}
+
+// ─── Scoring & Recommendations ──────────────────────────────────
+
+model JobScore {
+  id             String              @id @default(uuid())
+  jobId          String
+  job            JobPostingCanonical @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  huntRunId      String?
+  overallScore   Float
+  roleFitScore   Float
+  sectorFitScore Float
+  seniorityScore Float
+  locationScore  Float
+  networkScore   Float
+  companyScore   Float
+  explanation    String
+  createdAt      DateTime            @default(now())
+}
+
+model RankedJob {
+  id          String              @id @default(uuid())
+  huntRunId   String
+  huntRun     HuntRun             @relation(fields: [huntRunId], references: [id], onDelete: Cascade)
+  jobId       String
+  job         JobPostingCanonical @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  rank        Int
+  score       Float
+  whyRelevant String
+  whoCanHelp  String              @default("[]") // JSON
+  whatToDoFirst String
+  action      String // apply_now | ask_referral | ask_intro | message_recruiter | deprioritize
+  createdAt   DateTime            @default(now())
+}
+
+model WarmPathRecommendation {
+  id               String              @id @default(uuid())
+  jobId            String
+  job              JobPostingCanonical @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  personId         String
+  person           Person              @relation(fields: [personId], references: [id])
+  pathType         String // referral | intro | direct_message
+  strength         Float
+  explanation      String
+  suggestedMessage String?
+  createdAt        DateTime            @default(now())
+}
+
+model OutreachDraft {
+  id       String              @id @default(uuid())
+  jobId    String
+  job      JobPostingCanonical @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  personId String
+  person   Person              @relation(fields: [personId], references: [id])
+  channel  String // linkedin | email | phone
+  subject  String?
+  body     String
+  createdAt DateTime           @default(now())
+}
+
+// ─── Application Tracking ───────────────────────────────────────
+
+model Application {
+  id        String              @id @default(uuid())
+  userId    String
+  user      User                @relation(fields: [userId], references: [id])
+  jobId     String
+  job       JobPostingCanonical @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  status    String              @default("interested") // interested | applied | interviewing | offered | rejected | withdrawn
+  appliedAt DateTime?
+  notes     String?
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  outreachEvents OutreachEvent[]
+  followUpTasks  FollowUpTask[]
+}
+
+model OutreachEvent {
+  id            String       @id @default(uuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id])
+  applicationId String?
+  application   Application? @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  personId      String?
+  person        Person?      @relation(fields: [personId], references: [id])
+  type          String // message_sent | email_sent | call | meeting | referral_requested | intro_requested
+  channel       String // linkedin | email | phone | in_person
+  notes         String?
+  createdAt     DateTime     @default(now())
+}
+
+model FollowUpTask {
+  id            String       @id @default(uuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id])
+  applicationId String?
+  application   Application? @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  title         String
+  description   String?
+  dueDate       DateTime
+  status        String       @default("pending") // pending | done | skipped
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}

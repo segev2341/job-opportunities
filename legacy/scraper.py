@@ -67,52 +67,91 @@ class LinkedInJobScraper:
     # ------------------------------------------------------------------
 
     def scrape_all(self):
-        """Run a full scrape for every configured keyword and return matched jobs."""
-        keywords = self.config.get("search", {}).get("keywords", [])
-        max_per_kw = self.config.get("search", {}).get("max_results_per_keyword", 100)
+        """Run a full scrape using two strategies and return all jobs."""
         all_jobs = {}
 
+        # Strategy 1: Search by role keywords (broad - keep ALL results)
+        keywords = self.config.get("search", {}).get("keywords", [])
+        max_per_kw = self.config.get("search", {}).get("max_results_per_keyword", 100)
+
         for kw in keywords:
-            logger.info("Searching for: %s", kw)
+            logger.info("Searching role keyword: %s", kw)
             jobs = self._search_keyword(kw, max_results=max_per_kw)
             for job in jobs:
-                jid = job["id"]
-                if jid not in all_jobs:
-                    all_jobs[jid] = job
+                if job["id"] not in all_jobs:
+                    all_jobs[job["id"]] = job
+            logger.info("  Found %d jobs for '%s' (total unique: %d)", len(jobs), kw, len(all_jobs))
 
-        logger.info("Found %d unique jobs across all keywords", len(all_jobs))
+        # Strategy 2: Search by company name + broad role terms
+        # Pick a subset of top companies to search directly
+        company_lists = self.config.get("companies", {})
+        role_terms = ["sales", "business development", "pre-sales"]
+        companies_to_search = []
+        for category in company_lists.values():
+            companies_to_search.extend(category[:10])  # top 10 per category
 
-        # Filter to target companies
-        matched = []
-        unmatched = []
-        for job in all_jobs.values():
-            if self._matches_target_company(job):
-                matched.append(job)
-            else:
-                unmatched.append(job)
+        for company in companies_to_search:
+            for role in role_terms:
+                query = f"{company} {role}"
+                logger.info("Searching company+role: %s", query)
+                jobs = self._search_keyword(query, max_results=25)
+                for job in jobs:
+                    if job["id"] not in all_jobs:
+                        all_jobs[job["id"]] = job
+                if jobs:
+                    logger.info("  Found %d jobs for '%s'", len(jobs), query)
 
-        logger.info("%d jobs match target companies, %d do not", len(matched), len(unmatched))
+        logger.info("Total unique jobs found before filtering: %d", len(all_jobs))
 
-        # Score against resume
+        # Filter out engineering/technical roles (but keep sales engineer, solutions engineer, etc.)
+        business_engineer_titles = {"sales engineer", "solutions engineer", "customer engineer", "field engineer", "se "}
+        engineering_terms = {"software engineer", "devops", "backend engineer", "frontend engineer",
+                            "full stack", "fullstack", "data engineer", "ml engineer", "machine learning engineer",
+                            "sre", "site reliability", "platform engineer", "infrastructure engineer",
+                            "qa engineer", "test engineer", "automation engineer", "security engineer",
+                            "network engineer", "cloud engineer", "systems engineer", "embedded engineer",
+                            "firmware engineer", "hardware engineer", "developer", "architect",
+                            "engineering manager", "r&d", "research and development", "algorithm",
+                            "data scientist", "develope"}
+
+        filtered_jobs = {}
+        for jid, job in all_jobs.items():
+            title_lower = job.get("title", "").lower()
+            # Keep if it's a business-facing "engineer" role
+            is_business_eng = any(bt in title_lower for bt in business_engineer_titles)
+            # Skip if it's a technical/engineering role
+            is_tech = any(et in title_lower for et in engineering_terms)
+            if is_tech and not is_business_eng:
+                continue
+            filtered_jobs[jid] = job
+
+        all_jobs = filtered_jobs
+        logger.info("After filtering engineering roles: %d jobs", len(all_jobs))
+
+        # Score ALL jobs
         resume_keywords = self.config.get("resume", {}).get("skills", [])
-        for job in matched:
-            job["match_score"] = self._score_job(job, resume_keywords)
+        for job in all_jobs.values():
+            is_target = self._matches_target_company(job)
+            job["is_target_company"] = is_target
+            job["match_score"] = self._score_job(job, resume_keywords, is_target)
 
-        matched.sort(key=lambda j: j.get("match_score", 0), reverse=True)
+        # Sort by score
+        results = sorted(all_jobs.values(), key=lambda j: j.get("match_score", 0), reverse=True)
 
-        # Fetch details for top jobs
-        for job in matched[:50]:
+        # Fetch details for top 30 jobs to improve scoring
+        for job in results[:30]:
             if not job.get("description_full"):
                 try:
                     detail = self._get_job_detail(job["id"])
                     job.update(detail)
-                    job["match_score"] = self._score_job(job, resume_keywords)
+                    is_target = job.get("is_target_company", False)
+                    job["match_score"] = self._score_job(job, resume_keywords, is_target)
                     _delay(self.config)
                 except Exception as e:
                     logger.warning("Could not fetch detail for job %s: %s", job["id"], e)
 
-        matched.sort(key=lambda j: j.get("match_score", 0), reverse=True)
-        return matched
+        results.sort(key=lambda j: j.get("match_score", 0), reverse=True)
+        return results
 
     def save_jobs(self, jobs, path=None):
         path = path or os.path.join(DATA_DIR, "jobs.json")
@@ -136,7 +175,7 @@ class LinkedInJobScraper:
                 "location": location,
                 "geoId": geo_id,
                 "start": start,
-                "f_TPR": "r604800",  # Past week
+                "f_TPR": "r2592000",  # Past month
             }
             try:
                 resp = self.session.get(self.SEARCH_URL, params=params, timeout=15)
@@ -148,7 +187,6 @@ class LinkedInJobScraper:
                 if not page_jobs:
                     break
                 jobs.extend(page_jobs)
-                logger.info("  '%s' offset %d -> %d jobs", keyword, start, len(page_jobs))
                 _delay(self.config)
             except Exception as e:
                 logger.error("Error searching '%s' at offset %d: %s", keyword, start, e)
@@ -158,6 +196,7 @@ class LinkedInJobScraper:
 
     def _parse_search_results(self, html, keyword):
         soup = BeautifulSoup(html, "lxml")
+        # Find all job listing items
         cards = soup.find_all("div", class_="base-card")
         if not cards:
             cards = soup.find_all("li")
@@ -173,28 +212,47 @@ class LinkedInJobScraper:
         return jobs
 
     def _parse_card(self, card, keyword):
+        # Try multiple selectors for robustness
         title_el = card.find("h3", class_="base-search-card__title") or card.find("h3")
         company_el = card.find("h4", class_="base-search-card__subtitle") or card.find("h4")
-        location_el = card.find("span", class_="job-search-card__location") or card.find("span", class_="base-search-card__metadata")
+        location_el = (
+            card.find("span", class_="job-search-card__location")
+            or card.find("span", class_="base-search-card__metadata")
+        )
         link_el = card.find("a", class_="base-card__full-link") or card.find("a", href=True)
         time_el = card.find("time")
 
-        if not title_el or not link_el:
+        if not title_el:
             return None
 
         title = title_el.get_text(strip=True)
+        if not title:
+            return None
+
         company = company_el.get_text(strip=True) if company_el else "Unknown"
         location = location_el.get_text(strip=True) if location_el else ""
-        link = link_el.get("href", "")
         posted = time_el.get("datetime", "") if time_el else ""
 
-        # Extract job ID from link
+        # Get link and extract job ID
+        link = ""
         job_id = ""
-        m = re.search(r"/jobs/view/(\d+)", link)
-        if m:
-            job_id = m.group(1)
-        elif re.search(r"currentJobId=(\d+)", link):
-            job_id = re.search(r"currentJobId=(\d+)", link).group(1)
+        if link_el:
+            link = link_el.get("href", "")
+
+        # Also check the card's data attribute for job ID
+        entity_urn = card.get("data-entity-urn", "")
+        m_urn = re.search(r"jobPosting:(\d+)", entity_urn)
+        if m_urn:
+            job_id = m_urn.group(1)
+
+        if not job_id and link:
+            m = re.search(r"/jobs/view/[^/]*?(\d+)", link)
+            if m:
+                job_id = m.group(1)
+            else:
+                m2 = re.search(r"currentJobId=(\d+)", link)
+                if m2:
+                    job_id = m2.group(1)
 
         if not job_id:
             return None
@@ -209,6 +267,7 @@ class LinkedInJobScraper:
             "search_keyword": keyword,
             "description_full": "",
             "match_score": 0,
+            "is_target_company": False,
             "scraped_at": datetime.now().isoformat(),
         }
 
@@ -266,7 +325,7 @@ class LinkedInJobScraper:
                 return True
         return False
 
-    def _score_job(self, job, resume_keywords):
+    def _score_job(self, job, resume_keywords, is_target_company=False):
         text = " ".join([
             job.get("title", ""),
             job.get("description_full", ""),
@@ -275,10 +334,22 @@ class LinkedInJobScraper:
         ]).lower()
 
         if not text.strip():
-            return 0
+            return 10 if is_target_company else 5
 
+        # Base score from resume keyword matches
         hits = sum(1 for kw in resume_keywords if kw.lower() in text)
-        return round(hits / max(len(resume_keywords), 1) * 100)
+        score = round(hits / max(len(resume_keywords), 1) * 60)
+
+        # Bonus for target company (+30)
+        if is_target_company:
+            score += 30
+
+        # Bonus for defense/security/cyber in title or description (+10)
+        defense_terms = ["defense", "defence", "security", "cyber", "military", "intelligence", "aerospace"]
+        if any(t in text for t in defense_terms):
+            score += 10
+
+        return min(score, 100)
 
 
 # ------------------------------------------------------------------
@@ -290,7 +361,7 @@ def main():
     scraper = LinkedInJobScraper(config)
     jobs = scraper.scrape_all()
     scraper.save_jobs(jobs)
-    print(f"\nDone! Found {len(jobs)} matching jobs. Results saved to data/jobs.json")
+    print(f"\nDone! Found {len(jobs)} jobs. Results saved to data/jobs.json")
     print("Run the dashboard with: python src/app.py")
 
 

@@ -1,86 +1,98 @@
-# Job Opportunities
+# Job Hunt Intelligence
 
-A tool that scrapes LinkedIn for job opportunities in the **defense, cyber security, and defense-tech** industries in **Israel**, focused on **sales enablement, pre-sales, and business development** roles.
+A one-click job intelligence engine for business roles in cybersecurity, defence tech, and security companies in Israel.
 
-Includes a dashboard that shows jobs alongside your LinkedIn connections at each company, prioritized by background (IAF, IAF Special Forces, Tel Aviv University).
+Click **"Run Job Hunt"** and the system automatically discovers, scores, ranks, and recommends action for every opportunity.
 
-## Quick Start (Windows)
+## Quick Start
 
-1. **Double-click `run.bat`** in the project folder
-2. Choose option **4** (Full Run) for the first time
-3. Open **http://127.0.0.1:5000** in your browser
+```bash
+npm install
+npm run setup
+npm run dev
+```
 
-That's it! The script will install everything automatically.
+Open **http://localhost:3000** and click **"Run Job Hunt"**.
 
-## What It Does
+## What Happens When You Click "Run Job Hunt"
 
-### 1. Job Scraper
-- Searches LinkedIn's public job listings (no login needed)
-- Filters for sales/BD/pre-sales roles at defense and cyber security companies
-- Scores each job against your resume keywords
-- Saves results to `data/jobs.json`
+The system runs a 10-step pipeline automatically:
 
-### 2. Connection Finder
-- Opens a browser window for you to log into LinkedIn (one-time)
-- Searches for your connections at each company with job openings
-- Tags connections by background: IAF, IAF Special Forces, Tel Aviv University
-- Prioritizes connections by closeness and relevance
-- Saves results to `data/connections.json`
+1. **Query Expansion** - Generates 30+ search queries from your profile
+2. **Job Fetch** - Fetches jobs from providers (mock data in MVP)
+3. **Ingestion** - Stores raw job data
+4. **Canonicalization** - Deduplicates and detects reposts
+5. **Company Enrichment** - Adds company intel (sector, size, hiring signals)
+6. **Network Discovery** - Finds your connections at each company
+7. **Job Scoring** - Scores every job (role fit, sector, seniority, location, network, company)
+8. **Warm Path Generation** - Identifies best people to reach out to
+9. **Outreach Drafts** - Generates ready-to-send messages
+10. **Final Ranking** - Ranks jobs and recommends next action
 
-### 3. Dashboard
-- Clean web interface at http://127.0.0.1:5000
-- Shows all jobs with match scores, descriptions, and direct LinkedIn links
-- Shows your connections at each company with LinkedIn profile links
-- Color-coded connection strength (green = 1st degree, yellow = 2nd, purple = 3rd)
-- Filter by company, search by keyword, sort by match/date/company
-- Manually add jobs or connections via the UI
+## For Each Job, The System Answers
+
+- **Is this worth my time?** (score + explanation)
+- **Who can help me?** (connections ranked by closeness)
+- **What should I do first?** (concrete next action)
+
+## Recommended Actions
+
+| Action | When |
+|--------|------|
+| Apply Now | High score, strong fit |
+| Ask for Referral | High score + 1st-degree connection |
+| Request Intro | Good score + 2nd-degree connection |
+| Message Recruiter | Good score, no connections |
+| Low Priority | Lower score |
 
 ## Connection Priority
 
-| Priority | Source | Status |
-|----------|--------|--------|
-| 1 | IAF (Israeli Air Force) | Already connected |
-| 2 | IAF Special Forces | Not connected |
-| 3 | Tel Aviv University | Not connected |
-| 4 | Other | Connected |
-| 5 | Other | Not connected |
+| Priority | Source |
+|----------|--------|
+| 1st | IAF connections (direct) |
+| 2nd | IAF Special Forces (via mutual) |
+| 3rd | Tel Aviv University alumni |
+| 4th | Other 1st-degree connections |
+| 5th | Other 2nd-degree connections |
 
-## Manual Setup (if run.bat doesn't work)
+## Pages
 
-```bash
-# Install Python dependencies
-python -m pip install -r requirements.txt
+- **Dashboard** - Run job hunt + see ranked results
+- **Jobs** - Browse all discovered jobs
+- **Job Detail** - Full description, score breakdown, outreach messages
+- **Applications** - Track application status
+- **Follow-ups** - Manage follow-up tasks
+- **Run History** - View past hunt runs
 
-# Install browser for connection finder
-python -m playwright install chromium
+## Tech Stack
 
-# Run the scraper
-python src/scraper.py
+- Next.js 15 + TypeScript
+- Tailwind CSS v4
+- Prisma + SQLite (zero config)
+- Mock data providers (ready for real API integration)
 
-# Run the connection finder
-python src/connections.py
+## Architecture
 
-# Start the dashboard
-python src/app.py
+```
+src/
+  app/              # Next.js pages + API routes
+  components/       # Reusable UI components
+  lib/
+    adapters/       # Data providers (mock → real)
+    services/       # Business logic
+    db.ts           # Prisma client
+    types.ts        # Shared types
+prisma/
+  schema.prisma     # Database schema
+  seed.ts           # Initial data
 ```
 
-## Configuration
+## V2 Roadmap
 
-Edit `config.yaml` to customize:
-- **Search keywords** - job titles to search for
-- **Companies** - add or remove target companies
-- **Resume skills** - your skills for job matching
-- **Connection keywords** - background tags to look for
-- **Scraping delays** - adjust rate limiting
-
-## Adding Data Manually
-
-You can also add jobs and connections directly through the dashboard UI:
-- Click **"+ Add Job"** to add a job posting you found
-- Click **"+ Add Connection"** to add a LinkedIn connection at a company
-
-## Important Notes
-
-- LinkedIn may rate-limit or block automated requests. The scraper includes delays between requests to be respectful.
-- The connection finder requires a one-time manual login to LinkedIn. Your session is saved locally in `playwright_session/` so you don't need to log in every time.
-- No data is sent anywhere except to LinkedIn's own servers. All results are stored locally.
+- Real LinkedIn Jobs API integration
+- Real company data (Crunchbase, LinkedIn)
+- Real network data (LinkedIn connections)
+- AI-powered scoring and outreach generation
+- Email notifications for new matches
+- Calendar integration for follow-ups
+- PostgreSQL + Redis for production scale
