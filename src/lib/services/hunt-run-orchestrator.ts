@@ -38,6 +38,37 @@ export async function runHuntRun(userId: string, existingRunId?: string): Promis
   }
 
   try {
+    // ─── Step 0: Clean slate ─────────────────────────────────
+    // Delete ALL old data so each run is fresh (no stale mock data)
+    // Order respects foreign key constraints
+    await createStep(runId, "Cleanup", async () => {
+      // 1. Delete leaf tables first (they reference others)
+      const d1 = await prisma.outreachEvent.deleteMany({});
+      const d2 = await prisma.followUpTask.deleteMany({});
+      const d3 = await prisma.application.deleteMany({});
+      const d4 = await prisma.outreachDraft.deleteMany({});
+      const d5 = await prisma.warmPathRecommendation.deleteMany({});
+      const d6 = await prisma.rankedJob.deleteMany({});
+      const d7 = await prisma.jobScore.deleteMany({});
+      // 2. Clear self-reference on Person before deleting
+      await prisma.person.updateMany({ data: { mutualConnectionId: null } });
+      const d8 = await prisma.person.deleteMany({});
+      const d9 = await prisma.company.deleteMany({});
+      // 3. Clear FK from raw→canonical, then delete both
+      await prisma.jobPostingRaw.updateMany({ data: { canonicalJobId: null } });
+      const d10 = await prisma.jobPostingRaw.deleteMany({});
+      const d11 = await prisma.jobPostingCanonical.deleteMany({});
+      // 4. Delete old hunt run steps & runs (keep current)
+      await prisma.huntRunStep.deleteMany({
+        where: { huntRunId: { not: runId } },
+      });
+      await prisma.huntRun.deleteMany({
+        where: { id: { not: runId } },
+      });
+      const total = d1.count + d2.count + d3.count + d4.count + d5.count + d6.count + d7.count + d8.count + d9.count + d10.count + d11.count;
+      return `Cleared ${total} old records for a fresh run`;
+    });
+
     // ─── Step 1: Query Expansion ──────────────────────────────
     await createStep(runId, "Query Expansion", async () => {
       const queries = await expandQueries(userId);
