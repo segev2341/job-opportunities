@@ -99,7 +99,7 @@ export default function JobDetailPage() {
                     title={wp.person?.title}
                     url={wp.person?.linkedinUrl}
                     degree={wp.person?.connectionDegree ?? 0}
-                    backgroundTags={JSON.parse(wp.person?.backgroundTags ?? "[]")}
+                    backgroundTags={(() => { try { const t = wp.person?.backgroundTags; return Array.isArray(t) ? t : JSON.parse(t ?? "[]"); } catch { return []; } })()}
                     mutualConnectionName={wp.person?.mutualConnection?.name}
                   />
                   <ActionBadge action={wp.pathType} />

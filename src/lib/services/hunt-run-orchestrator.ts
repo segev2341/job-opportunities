@@ -7,7 +7,7 @@ import { enrichCompanies } from "./company-intel";
 import { discoverConnections } from "./network-intel";
 import { generateWarmPaths } from "./warm-path";
 import { generateOutreachDrafts } from "./outreach-draft";
-import { mockJobsProvider } from "@/lib/adapters/mock-jobs";
+import { linkedinJobsProvider } from "@/lib/adapters/linkedin-jobs";
 import { mockCompanyProvider } from "@/lib/adapters/mock-companies";
 import { mockNetworkProvider } from "@/lib/adapters/mock-network";
 import type { RecommendedAction } from "@/lib/types";
@@ -49,27 +49,21 @@ export async function runHuntRun(userId: string, existingRunId?: string): Promis
     });
 
     // ─── Step 2: Job Fetch ────────────────────────────────────
-    let fetchedCount = 0;
+    let fetchedRawJobs: Awaited<ReturnType<typeof linkedinJobsProvider.fetchJobs>> = [];
     await createStep(runId, "Job Fetch", async () => {
       const queries = await expandQueries(userId);
-      // TODO: Replace with real providers when ready
-      const provider = mockJobsProvider;
-      const rawJobs = await provider.fetchJobs(queries, "Israel");
-      fetchedCount = rawJobs.length;
+      fetchedRawJobs = await linkedinJobsProvider.fetchJobs(queries, "Israel");
 
       await prisma.huntRun.update({
         where: { id: runId },
-        data: { jobsFetched: fetchedCount },
+        data: { jobsFetched: fetchedRawJobs.length },
       });
-      return `Fetched ${fetchedCount} raw jobs from providers`;
+      return `Fetched ${fetchedRawJobs.length} raw jobs from LinkedIn`;
     });
 
     // ─── Step 3: Job Ingestion ────────────────────────────────
     await createStep(runId, "Job Ingestion", async () => {
-      const provider = mockJobsProvider;
-      const queries = await expandQueries(userId);
-      const rawJobs = await provider.fetchJobs(queries, "Israel");
-      const ingested = await ingestRawJobs(rawJobs);
+      const ingested = await ingestRawJobs(fetchedRawJobs);
       return `Ingested ${ingested} raw jobs into database`;
     });
 

@@ -45,7 +45,8 @@ export function JobCard({ rankedJob, onApply }: { rankedJob: RankedJob; onApply:
 
   let contacts: Contact[] = [];
   try {
-    contacts = JSON.parse(rankedJob.whoCanHelp || "[]");
+    const raw = rankedJob.whoCanHelp;
+    contacts = Array.isArray(raw) ? raw : JSON.parse(raw || "[]");
   } catch {}
 
   const scoreColor = score >= 70 ? "#22c55e" : score >= 40 ? "#f59e0b" : "#6b7280";
