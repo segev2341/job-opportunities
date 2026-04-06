@@ -3,6 +3,39 @@
 import { useState, useEffect } from "react";
 import { JobCard } from "@/components/job-card";
 
+/**
+ * Normalize API data into the shape JobCard expects.
+ * The /api/jobs endpoint returns flat objects when no huntRunId is given,
+ * but JobCard expects { rank, score, job: { ... } }.
+ */
+function normalizeToRankedJob(item: any): any {
+  // Already in ranked format (has job sub-object)
+  if (item.job && typeof item.job === "object" && item.job.id) {
+    return item;
+  }
+  // Flat format — wrap it
+  return {
+    id: item.id,
+    rank: item.rank ?? 0,
+    score: item.score ?? 0,
+    whyRelevant: item.whyRelevant ?? "",
+    whoCanHelp: item.whoCanHelp ?? "[]",
+    whatToDoFirst: item.whatToDoFirst ?? "",
+    action: item.action ?? "deprioritize",
+    job: {
+      id: item.id,
+      title: item.title,
+      company: item.company,
+      location: item.location,
+      url: item.url,
+      description: item.description ?? "",
+      seniority: item.seniority ?? null,
+      sector: item.sector ?? null,
+      postedAt: item.postedAt ?? null,
+    },
+  };
+}
+
 export default function JobsPage() {
   const [jobs, setJobs] = useState<any[]>([]);
   const [search, setSearch] = useState("");
@@ -11,13 +44,17 @@ export default function JobsPage() {
   useEffect(() => {
     fetch("/api/jobs")
       .then((r) => r.json())
-      .then((data) => { setJobs(data); setLoading(false); })
+      .then((data) => {
+        const normalized = Array.isArray(data) ? data.map(normalizeToRankedJob) : [];
+        setJobs(normalized);
+        setLoading(false);
+      })
       .catch(() => setLoading(false));
   }, []);
 
   const filtered = jobs.filter((rj: any) => {
     if (!search) return true;
-    const text = `${rj.job?.title ?? rj.title} ${rj.job?.company ?? rj.company}`.toLowerCase();
+    const text = `${rj.job.title} ${rj.job.company}`.toLowerCase();
     return text.includes(search.toLowerCase());
   });
 
@@ -43,7 +80,7 @@ export default function JobsPage() {
       )}
       <div className="space-y-4">
         {filtered.map((rj: any) => (
-          <JobCard key={rj.id} rankedJob={rj} onApply={() => handleApply(rj.job?.id ?? rj.id)} />
+          <JobCard key={rj.id} rankedJob={rj} onApply={() => handleApply(rj.job.id)} />
         ))}
       </div>
     </div>
