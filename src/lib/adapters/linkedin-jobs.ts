@@ -9,26 +9,79 @@ const SEARCH_URL = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPosti
 const JOB_VIEW_URL = "https://www.linkedin.com/jobs/view/";
 const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
-// Engineering roles to exclude (but keep sales/solutions engineer)
-const ENGINEERING_EXCLUDE = [
-  "software engineer", "devops", "backend engineer", "frontend engineer",
-  "full stack", "fullstack", "data engineer", "ml engineer", "qa engineer",
-  "sre", "platform engineer", "developer", "architect", "r&d manager",
-  "algorithm", "data scientist", "firmware", "hardware engineer",
-  "embedded engineer", "test engineer", "automation engineer",
+// HARD engineering blocks — ALWAYS exclude, even if other words appear.
+// e.g. "Full Stack Sales Engineer" → still excluded because "full stack" is hard-blocked.
+const HARD_ENGINEERING_EXCLUDE = [
+  "full stack", "fullstack", "full-stack",
+  "software engineer", "software developer", "software engineering",
+  "backend", "back-end", "back end",
+  "frontend", "front-end", "front end",
+  "devops", "dev ops",
+  "data engineer", "ml engineer", "machine learning engineer",
+  "data scientist",
+  "developer", "programmer",
+  "firmware", "embedded",
+  "algorithm",
+  "qa engineer", "qa automation", "test engineer", "automation engineer",
+  "sre ", "site reliability",
   "security engineer", "network engineer", "cloud engineer",
-  "systems engineer", "infrastructure engineer", "engineering manager",
+  "systems engineer", "infrastructure engineer",
+  "hardware engineer", "electronics engineer", "rf engineer",
+  "architect",
+  "r&d", "research and development",
 ];
+
+// SOFT business-engineer whitelist — these are sales/CS-type roles
+// (only applied AFTER hard block check)
 const BUSINESS_ENGINEER_OK = [
   "sales engineer", "solutions engineer", "customer engineer",
-  "field engineer", "se ", "presales engineer", "pre-sales engineer",
+  "presales engineer", "pre-sales engineer", "pre sales engineer",
+  "field engineer",
 ];
+
+// Seniority exclusions — user only wants junior/individual-contributor roles
+const SENIOR_EXCLUDE = [
+  "senior", "sr.", "sr ",
+  "head of", "head,", "head -",
+  "lead ", " lead", "team lead", "tech lead",
+  "principal",
+  "director", " dir ",
+  "vp ", " vp", "vice president", "v.p.",
+  "chief", " cxo", "cto", "ceo", "cfo", "coo", "cro", "cmo", "ciso",
+  "staff",
+  "group manager", "country manager", "regional manager",
+  " iii", " iv",
+  "expert",
+];
+
+function isSeniorRole(title: string): boolean {
+  const lower = ` ${title.toLowerCase()} `;
+  return SENIOR_EXCLUDE.some((s) => lower.includes(s));
+}
 
 function isEngineeringRole(title: string): boolean {
   const lower = title.toLowerCase();
-  const isBusinessEng = BUSINESS_ENGINEER_OK.some((b) => lower.includes(b));
-  if (isBusinessEng) return false;
-  return ENGINEERING_EXCLUDE.some((e) => lower.includes(e));
+
+  // 1. Hard block: if ANY hard engineering term is present, exclude regardless
+  if (HARD_ENGINEERING_EXCLUDE.some((e) => lower.includes(e))) {
+    return true;
+  }
+
+  // 2. Business engineer whitelist: sales/solutions/CS engineers are OK
+  if (BUSINESS_ENGINEER_OK.some((b) => lower.includes(b))) {
+    return false;
+  }
+
+  // 3. Generic "engineer" in title without business-eng context → exclude
+  if (/\bengineer\b/.test(lower)) {
+    return true;
+  }
+
+  return false;
+}
+
+function shouldSkipJob(title: string): boolean {
+  return isEngineeringRole(title) || isSeniorRole(title);
 }
 
 function delay(ms: number): Promise<void> {
@@ -100,8 +153,8 @@ function parseJobCards(html: string, keyword: string): RawJobFromProvider[] {
     const postedAt = dates[i] ?? undefined;
     const jobId = jobIds[i];
 
-    // Skip engineering roles
-    if (isEngineeringRole(title)) continue;
+    // Skip engineering roles and senior positions (user wants juniors only)
+    if (shouldSkipJob(title)) continue;
 
     jobs.push({
       source: "linkedin",

@@ -40,7 +40,15 @@ interface RankedJob {
   };
 }
 
-export function JobCard({ rankedJob, onApply }: { rankedJob: RankedJob; onApply: () => void }) {
+export function JobCard({
+  rankedJob,
+  onApply,
+  onHide,
+}: {
+  rankedJob: RankedJob;
+  onApply: () => void;
+  onHide?: () => void;
+}) {
   const { job, score, whyRelevant, whatToDoFirst, action, rank } = rankedJob;
 
   let contacts: Contact[] = [];
@@ -75,6 +83,21 @@ export function JobCard({ rankedJob, onApply }: { rankedJob: RankedJob; onApply:
             {score}%
           </span>
           <ActionBadge action={action} />
+          {onHide && (
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (confirm("Hide this job permanently? It won't appear in future runs.")) {
+                  onHide();
+                }
+              }}
+              title="Hide this job permanently"
+              className="w-8 h-8 flex items-center justify-center rounded-lg bg-[#222633] hover:bg-[#ef4444] text-[#9ca3af] hover:text-white border border-[#2a2e3b] transition-colors text-lg leading-none"
+            >
+              &times;
+            </button>
+          )}
         </div>
       </div>
 

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 /**
  * Deduplicate raw jobs into canonical records.
  * Two raw jobs are considered duplicates if title+company match closely.
+ * Also filters out any jobs matching the user's IgnoredJob blacklist.
  */
 export async function canonicalizeJobs(): Promise<number> {
   const unlinked = await prisma.jobPostingRaw.findMany({
@@ -11,6 +12,12 @@ export async function canonicalizeJobs(): Promise<number> {
 
   if (unlinked.length === 0) return 0;
 
+  // Load the ignored-job blacklist so we never process hidden ones again
+  const ignored = await prisma.ignoredJob.findMany();
+  const ignoredKeys = new Set(
+    ignored.map((ig) => `${ig.titleNorm}||${ig.companyNorm}`)
+  );
+
   const existing = await prisma.jobPostingCanonical.findMany();
   let created = 0;
 
@@ -18,6 +25,11 @@ export async function canonicalizeJobs(): Promise<number> {
     // Check if a canonical job already exists for this title+company
     const normTitle = normalize(raw.title);
     const normCompany = normalize(raw.company);
+
+    // Skip jobs the user previously hid
+    if (ignoredKeys.has(`${normTitle}||${normCompany}`)) {
+      continue;
+    }
 
     const match = existing.find(
       (c) => normalize(c.title) === normTitle && normalize(c.company) === normCompany

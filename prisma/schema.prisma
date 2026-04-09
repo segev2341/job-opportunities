@@ -278,3 +278,17 @@ model FollowUpTask {
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 }
+
+// ─── Ignored Jobs (persistent blacklist) ───────────────────────
+// When the user hides a job, we record a normalized title+company
+// so it will be filtered out on future runs too.
+model IgnoredJob {
+  id           String   @id @default(uuid())
+  titleNorm    String
+  companyNorm  String
+  titleDisplay String
+  companyDisplay String
+  createdAt    DateTime @default(now())
+
+  @@unique([titleNorm, companyNorm])
+}

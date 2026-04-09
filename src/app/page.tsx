@@ -39,11 +39,25 @@ interface HuntRun {
   rankedJobs: RankedJob[];
 }
 
+type SortMode = "score" | "location";
+
+/**
+ * Reduce a full LinkedIn location string like "Tel Aviv-Yafo, Tel Aviv District, Israel"
+ * down to the most useful part for filtering: the first segment ("Tel Aviv-Yafo").
+ */
+function simplifyLocation(location: string | undefined | null): string {
+  if (!location) return "";
+  return location.split(",")[0].trim();
+}
+
 export default function Dashboard() {
   const [latestRun, setLatestRun] = useState<HuntRun | null>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [isLaunching, setIsLaunching] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [sortMode, setSortMode] = useState<SortMode>("score");
+  const [locationFilter, setLocationFilter] = useState<string>("all");
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
 
   // Load the latest hunt run
   useEffect(() => {
@@ -102,7 +116,47 @@ export default function Dashboard() {
     await fetch(`/api/jobs/${jobId}/apply`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
   };
 
-  const rankedJobs = latestRun?.rankedJobs ?? [];
+  const handleHide = async (jobId: string) => {
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/hide`, { method: "POST" });
+      if (res.ok) {
+        setHiddenIds((prev) => new Set(prev).add(jobId));
+      }
+    } catch (e) {
+      console.error("Failed to hide job:", e);
+    }
+  };
+
+  const allRankedJobs = (latestRun?.rankedJobs ?? []).filter(
+    (rj) => !hiddenIds.has(rj.job.id)
+  );
+
+  // Extract unique locations (simplify by grabbing city/region)
+  const locationOptions = [
+    "all",
+    ...Array.from(
+      new Set(
+        allRankedJobs
+          .map((rj) => simplifyLocation(rj.job.location))
+          .filter(Boolean)
+      )
+    ).sort(),
+  ];
+
+  const filteredJobs =
+    locationFilter === "all"
+      ? allRankedJobs
+      : allRankedJobs.filter(
+          (rj) => simplifyLocation(rj.job.location) === locationFilter
+        );
+
+  const rankedJobs =
+    sortMode === "location"
+      ? [...filteredJobs].sort((a, b) =>
+          (a.job.location || "").localeCompare(b.job.location || "")
+        )
+      : [...filteredJobs].sort((a, b) => b.score - a.score);
+
   const isRunning = !!activeRunId;
 
   return (
@@ -164,16 +218,50 @@ export default function Dashboard() {
       )}
 
       {/* Results */}
-      {latestRun?.status === "completed" && rankedJobs.length > 0 && (
+      {latestRun?.status === "completed" && allRankedJobs.length > 0 && (
         <div className="space-y-4">
-          <h2 className="text-xl font-semibold text-white">Ranked Opportunities</h2>
-          {rankedJobs.map((rj) => (
-            <JobCard
-              key={rj.id}
-              rankedJob={rj}
-              onApply={() => handleApply(rj.job.id)}
-            />
-          ))}
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <h2 className="text-xl font-semibold text-white">
+              Ranked Opportunities ({rankedJobs.length})
+            </h2>
+            <div className="flex items-center gap-3">
+              <label className="text-sm text-[#9ca3af]">Location:</label>
+              <select
+                value={locationFilter}
+                onChange={(e) => setLocationFilter(e.target.value)}
+                className="px-3 py-2 bg-[#1a1d27] border border-[#2a2e3b] rounded-lg text-white text-sm focus:border-[#3b82f6] outline-none"
+              >
+                {locationOptions.map((loc) => (
+                  <option key={loc} value={loc}>
+                    {loc === "all" ? "All locations" : loc}
+                  </option>
+                ))}
+              </select>
+              <label className="text-sm text-[#9ca3af]">Sort:</label>
+              <select
+                value={sortMode}
+                onChange={(e) => setSortMode(e.target.value as SortMode)}
+                className="px-3 py-2 bg-[#1a1d27] border border-[#2a2e3b] rounded-lg text-white text-sm focus:border-[#3b82f6] outline-none"
+              >
+                <option value="score">Score (highest first)</option>
+                <option value="location">Location (A–Z)</option>
+              </select>
+            </div>
+          </div>
+          {rankedJobs.length === 0 ? (
+            <div className="text-center py-10 text-[#9ca3af]">
+              No jobs match this location filter.
+            </div>
+          ) : (
+            rankedJobs.map((rj) => (
+              <JobCard
+                key={rj.id}
+                rankedJob={rj}
+                onApply={() => handleApply(rj.job.id)}
+                onHide={() => handleHide(rj.job.id)}
+              />
+            ))
+          )}
         </div>
       )}
 
