@@ -179,7 +179,6 @@ export const TARGET_ROLES = [
   "HR Generalist",
   "HR Specialist",
   "HR Associate",
-  "Talent Acquisition",
   "Recruiter",
   "People Operations",
 ];

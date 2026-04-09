@@ -38,7 +38,6 @@ async function main() {
     // HR / People (junior, no 3+ years required)
     "HR Coordinator",
     "HR Generalist",
-    "Talent Acquisition",
     "Recruiter",
     "People Operations",
     "HR Specialist",

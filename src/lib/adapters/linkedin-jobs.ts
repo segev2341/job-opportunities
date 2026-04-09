@@ -80,8 +80,22 @@ function isEngineeringRole(title: string): boolean {
   return false;
 }
 
+// Role titles to always exclude regardless of seniority
+const ALWAYS_EXCLUDE_TITLES = [
+  "talent acquisition",
+  "talent acquisition partner",
+  "talent acquisition specialist",
+  "talent acquisition manager",
+  "ta partner",
+];
+
+function isExcludedTitle(title: string): boolean {
+  const lower = title.toLowerCase();
+  return ALWAYS_EXCLUDE_TITLES.some((t) => lower.includes(t));
+}
+
 function shouldSkipJob(title: string): boolean {
-  return isEngineeringRole(title) || isSeniorRole(title);
+  return isExcludedTitle(title) || isEngineeringRole(title) || isSeniorRole(title);
 }
 
 // ─── Description-based filters ─────────────────────────────────────

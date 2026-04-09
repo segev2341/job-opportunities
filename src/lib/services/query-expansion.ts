@@ -10,7 +10,6 @@ const HR_ROLE_KEYWORDS = [
   "HR Generalist",
   "HR Specialist",
   "HR Associate",
-  "Talent Acquisition",
   "Recruiter",
   "People Operations",
 ];
@@ -19,7 +18,6 @@ function isHrRole(role: string): boolean {
   const lower = role.toLowerCase();
   return (
     lower.includes("hr ") ||
-    lower.includes("talent acquisition") ||
     lower.includes("recruiter") ||
     lower.includes("people operations")
   );
