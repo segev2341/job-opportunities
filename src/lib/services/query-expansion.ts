@@ -2,6 +2,30 @@ import { prisma } from "@/lib/db";
 import { TARGET_ROLES, TARGET_SECTORS, TARGET_COMPANIES_ISRAEL } from "@/lib/types";
 
 /**
+ * HR roles are searched without a sector qualifier because they exist
+ * across all industries, not just cyber/defense.
+ */
+const HR_ROLE_KEYWORDS = [
+  "HR Coordinator",
+  "HR Generalist",
+  "HR Specialist",
+  "HR Associate",
+  "Talent Acquisition",
+  "Recruiter",
+  "People Operations",
+];
+
+function isHrRole(role: string): boolean {
+  const lower = role.toLowerCase();
+  return (
+    lower.includes("hr ") ||
+    lower.includes("talent acquisition") ||
+    lower.includes("recruiter") ||
+    lower.includes("people operations")
+  );
+}
+
+/**
  * Generate search query variants from user preferences.
  * Combines roles x sectors x locations to create broad coverage.
  */
@@ -14,8 +38,12 @@ export async function expandQueries(userId: string): Promise<string[]> {
 
   const queries: Set<string> = new Set();
 
-  // Strategy 1: role + sector + location
-  for (const role of roles.slice(0, 6)) {
+  // Separate HR roles from business/sales roles
+  const businessRoles = roles.filter((r) => !isHrRole(r));
+  const hrRoles = roles.filter(isHrRole);
+
+  // Strategy 1: business role + sector + location
+  for (const role of businessRoles.slice(0, 6)) {
     for (const sector of sectors.slice(0, 4)) {
       for (const loc of locations.slice(0, 2)) {
         queries.add(`${role} ${sector} ${loc}`);
@@ -24,7 +52,7 @@ export async function expandQueries(userId: string): Promise<string[]> {
   }
 
   // Strategy 2: role + location (broader)
-  for (const role of roles) {
+  for (const role of businessRoles) {
     queries.add(`${role} Israel`);
   }
 
@@ -39,6 +67,14 @@ export async function expandQueries(userId: string): Promise<string[]> {
   for (const sector of sectors.slice(0, 6)) {
     queries.add(`${sector} sales Israel`);
     queries.add(`${sector} business development Israel`);
+  }
+
+  // Strategy 5: HR roles — search across ALL industries, not just cyber/defense.
+  // Use a broad location-only query so we catch HR openings everywhere.
+  const hrQueryRoles = hrRoles.length > 0 ? hrRoles : HR_ROLE_KEYWORDS;
+  for (const role of hrQueryRoles) {
+    queries.add(`${role} Israel`);
+    queries.add(`Junior ${role} Israel`);
   }
 
   return Array.from(queries);

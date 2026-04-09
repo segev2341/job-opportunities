@@ -84,6 +84,113 @@ function shouldSkipJob(title: string): boolean {
   return isEngineeringRole(title) || isSeniorRole(title);
 }
 
+// ─── Description-based filters ─────────────────────────────────────
+// Segev's CV: BA in Management & Philosophy (not a STEM degree).
+// Any job that REQUIRES a technical bachelor's is disqualifying.
+
+/**
+ * Detects if the job description mandates a technical/engineering degree
+ * (B.Sc in engineering, CS, optics, electro-optical, physics, etc.).
+ */
+function requiresTechnicalDegree(description: string): boolean {
+  if (!description) return false;
+  const d = description.toLowerCase();
+
+  // Pattern: "B.Sc / BSc / Bachelor of Science / Bachelor's / degree in <tech field>"
+  // The "in" connector is optional to catch "CS degree", "engineering degree" etc.
+  const degreeTriggers = [
+    "b.sc", "bsc ", "b.s. ", "b.sc.",
+    "bachelor of science",
+    "bachelor's degree",
+    "bachelors degree",
+    "bachelor degree",
+    "academic degree",
+    "university degree",
+  ];
+  const hasDegreeWord = degreeTriggers.some((t) => d.includes(t));
+
+  const techFieldPhrases = [
+    "in engineering",
+    "in computer science",
+    "in cs ",
+    "in software engineering",
+    "in electrical engineering",
+    "in electronics",
+    "in optics",
+    "in optical",
+    "in electro-optical",
+    "in electro optical",
+    "in physics",
+    "in mathematics",
+    "in mechanical engineering",
+    "in industrial engineering",
+    "in information systems",
+    "engineering degree",
+    "cs degree",
+    "computer science degree",
+    "technical degree",
+    "stem degree",
+  ];
+  const hasTechField = techFieldPhrases.some((t) => d.includes(t));
+
+  // Either explicit "B.Sc in engineering" style, OR standalone technical-field phrase
+  if (hasDegreeWord && hasTechField) return true;
+  if (hasTechField) return true;
+
+  // Also catch short-form mentions like "B.Sc. in Electrical/Computer/Software Engineering"
+  if (/b\.?\s?sc\.?[^.]{0,40}(engineer|computer science|optical|optics|physics|electronics)/i.test(description)) {
+    return true;
+  }
+  if (/bachelor[^.]{0,40}(engineer|computer science|optical|optics|physics|electronics)/i.test(description)) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Detects if the description requires 3+ years of experience.
+ * The user wants junior roles only.
+ */
+function requiresTooMuchExperience(description: string): boolean {
+  if (!description) return false;
+  const d = description.toLowerCase();
+
+  // Patterns like "3+ years", "5+ years", "minimum 3 years", "at least 4 years"
+  // Also: "3-5 years", "3 to 5 years"
+  const patterns: RegExp[] = [
+    /\b([3-9]|[1-9]\d)\s*\+\s*years?\b/i, // "3+ years"
+    /\bminimum\s+(?:of\s+)?([3-9]|[1-9]\d)\s+years?\b/i, // "minimum 3 years"
+    /\bat\s+least\s+([3-9]|[1-9]\d)\s+years?\b/i, // "at least 3 years"
+    /\b([3-9]|[1-9]\d)\s*(?:-|to)\s*\d+\s+years?\b/i, // "3-5 years" or "3 to 5 years"
+    /\b([3-9]|[1-9]\d)\s+or\s+more\s+years?\b/i, // "3 or more years"
+    /\bover\s+([3-9]|[1-9]\d)\s+years?\b/i, // "over 3 years"
+  ];
+
+  for (const re of patterns) {
+    const m = description.match(re);
+    if (m) {
+      const yrs = parseInt(m[1], 10);
+      if (!isNaN(yrs) && yrs >= 3) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Post-enrichment filter: decide whether a job (with full description)
+ * should be dropped based on disqualifying requirements.
+ */
+function shouldDropByDescription(description: string): { drop: boolean; reason?: string } {
+  if (requiresTechnicalDegree(description)) {
+    return { drop: true, reason: "requires a technical/engineering degree" };
+  }
+  if (requiresTooMuchExperience(description)) {
+    return { drop: true, reason: "requires 3+ years of experience" };
+  }
+  return { drop: false };
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -273,11 +380,23 @@ export const linkedinJobsProvider: JobsProvider = {
     const allJobs: RawJobFromProvider[] = [];
     const geoId = "101620260"; // Israel
 
-    // Limit queries to avoid rate limiting - pick the most important ones
-    // Strategy: take first 8 role queries + first 6 company queries
-    const roleQueries = queries.filter((q) => !q.includes("sales") || q.split(" ").length > 2).slice(0, 8);
-    const companyQueries = queries.filter((q) => q.split(" ").length <= 3 && (q.includes("sales") || q.includes("business development"))).slice(0, 6);
-    const selectedQueries = [...new Set([...roleQueries, ...companyQueries])].slice(0, 12);
+    // Limit queries to avoid rate limiting - pick the most important ones.
+    // Keep a mix of: BD/sales role queries, company+role queries, and HR queries.
+    const isHrQuery = (q: string) =>
+      /\b(hr|talent acquisition|recruiter|people operations)\b/i.test(q);
+    const isCompanyQuery = (q: string) =>
+      q.split(" ").length <= 3 &&
+      (q.toLowerCase().includes("sales") || q.toLowerCase().includes("business development"));
+
+    const hrQueries = queries.filter(isHrQuery).slice(0, 6);
+    const companyQueries = queries.filter(isCompanyQuery).slice(0, 5);
+    const roleQueries = queries
+      .filter((q) => !isHrQuery(q) && !isCompanyQuery(q))
+      .slice(0, 6);
+
+    const selectedQueries = [
+      ...new Set([...roleQueries, ...companyQueries, ...hrQueries]),
+    ].slice(0, 16);
 
     console.log(`[LinkedIn] Searching ${selectedQueries.length} queries...`);
 
@@ -295,17 +414,43 @@ export const linkedinJobsProvider: JobsProvider = {
       console.log(`[LinkedIn]   Found ${jobs.length} jobs (${allJobs.length} total unique)`);
     }
 
-    // Enrich top 20 jobs with full descriptions
-    console.log(`[LinkedIn] Enriching top 20 jobs with descriptions...`);
-    for (const job of allJobs.slice(0, 20)) {
+    // Enrich more jobs with full descriptions so the description filter
+    // has real data to work with. Cap at 50 to balance thoroughness vs time.
+    const MAX_ENRICH = 50;
+    const toEnrich = allJobs.slice(0, MAX_ENRICH);
+    console.log(`[LinkedIn] Enriching ${toEnrich.length} jobs with full descriptions...`);
+
+    const enrichedJobs: RawJobFromProvider[] = [];
+    let droppedDegree = 0;
+    let droppedExperience = 0;
+
+    for (const job of toEnrich) {
       const desc = await fetchJobDetail(job.externalId);
       if (desc) {
         job.description = desc;
+
+        // Apply description-based filters
+        const { drop, reason } = shouldDropByDescription(desc);
+        if (drop) {
+          if (reason?.includes("degree")) droppedDegree++;
+          else if (reason?.includes("experience")) droppedExperience++;
+          console.log(`[LinkedIn]   DROP "${job.title}" @ ${job.company}: ${reason}`);
+          continue;
+        }
       }
+      enrichedJobs.push(job);
       await delay(1500 + Math.random() * 1500);
     }
 
-    console.log(`[LinkedIn] Done. Total: ${allJobs.length} unique jobs.`);
-    return allJobs;
+    // Add the un-enriched tail (jobs past MAX_ENRICH) as-is
+    const tail = allJobs.slice(MAX_ENRICH);
+    const finalJobs = [...enrichedJobs, ...tail];
+
+    console.log(
+      `[LinkedIn] Done. Kept ${finalJobs.length} jobs ` +
+      `(dropped ${droppedDegree} for technical degree requirements, ` +
+      `${droppedExperience} for 3+ years experience).`
+    );
+    return finalJobs;
   },
 };

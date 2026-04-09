@@ -158,6 +158,7 @@ export interface UserPreferencesInput {
 // ─── Default configuration ──────────────────────────────────────
 
 export const TARGET_ROLES = [
+  // Sales / BD / Pre-sales
   "Business Development",
   "Strategic Partnerships",
   "Enterprise Sales",
@@ -172,6 +173,15 @@ export const TARGET_ROLES = [
   "GTM Strategy",
   "Commercial Strategy",
   "Business Operations",
+  "Program Manager",
+  // HR / People (junior level only)
+  "HR Coordinator",
+  "HR Generalist",
+  "HR Specialist",
+  "HR Associate",
+  "Talent Acquisition",
+  "Recruiter",
+  "People Operations",
 ];
 
 export const TARGET_SECTORS = [
